@@ -95,3 +95,26 @@ export function nearest(
   scored.sort((x, y) => x.distance - y.distance || x.cocktail.name.localeCompare(y.cocktail.name));
   return scored.slice(0, k);
 }
+
+export type SwapResult =
+  | { status: 'exact'; combination: Combination; matches: Cocktail[] }
+  | { status: 'miss'; combination: Combination; nearest: NearestResult[] };
+
+export function swap(
+  combo: Combination,
+  componentIndex: number,
+  newIngredientId: string,
+  index: EngineIndex,
+  td: TreeDistanceFn,
+): SwapResult {
+  const newComponents = combo.components.map((c, i) =>
+    i === componentIndex ? { ...c, ingredientId: newIngredientId } : c,
+  );
+  const newCombo: Combination = { components: newComponents, techniques: combo.techniques };
+
+  const id = identify(newCombo, index);
+  if (id.status === 'exact') {
+    return { status: 'exact', combination: newCombo, matches: id.matches };
+  }
+  return { status: 'miss', combination: newCombo, nearest: nearest(newCombo, index, td) };
+}

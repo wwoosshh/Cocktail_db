@@ -118,3 +118,56 @@ export function swap(
   }
   return { status: 'miss', combination: newCombo, nearest: nearest(newCombo, index, td) };
 }
+
+export interface ExploreCandidate {
+  cocktail: Cocktail;
+  missing: Component[];
+}
+
+function liquidKeys(components: Component[]): string[] {
+  return components
+    .filter((c) => LIQUID_BUILD_ROLES.has(c.role))
+    .map((c) => `${c.role}:${c.ingredientId}`);
+}
+
+function countMap(keys: string[]): Map<string, number> {
+  const m = new Map<string, number>();
+  for (const k of keys) m.set(k, (m.get(k) ?? 0) + 1);
+  return m;
+}
+
+export function explore(partial: Combination, index: EngineIndex): ExploreCandidate[] {
+  const haveCount = countMap(liquidKeys(partial.components));
+
+  const candidates: ExploreCandidate[] = [];
+  for (const ck of index.cocktails) {
+    const ckLiquid = ck.components.filter((c) => LIQUID_BUILD_ROLES.has(c.role));
+    const ckCount = countMap(ckLiquid.map((c) => `${c.role}:${c.ingredientId}`));
+
+    let isSubset = true;
+    for (const [key, need] of haveCount) {
+      if ((ckCount.get(key) ?? 0) < need) {
+        isSubset = false;
+        break;
+      }
+    }
+    if (!isSubset) continue;
+
+    // missing = cocktail liquid components minus what we already have (multiset diff)
+    const remaining = new Map(haveCount);
+    const missing: Component[] = [];
+    for (const c of ckLiquid) {
+      const key = `${c.role}:${c.ingredientId}`;
+      const r = remaining.get(key) ?? 0;
+      if (r > 0) remaining.set(key, r - 1);
+      else missing.push(c);
+    }
+
+    candidates.push({ cocktail: ck, missing });
+  }
+
+  candidates.sort(
+    (a, b) => a.missing.length - b.missing.length || a.cocktail.name.localeCompare(b.cocktail.name),
+  );
+  return candidates;
+}
